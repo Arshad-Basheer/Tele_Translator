@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tele-Translator Console</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; text-align: center; }
+        a { color: #00d4ff; text-decoration: none; font-weight: bold; }
+        .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 10px; }
+        button { background: #00d4ff; border: none; padding: 10px 20px; color: #000; font-weight: bold; cursor: pointer; border-radius: 5px; margin: 10px; }
+        button:hover { background: #00a3cc; }
+        h1 { color: #ffffff; }
+        .card { background: #2c2c2c; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        input, select { padding: 10px; margin: 5px; width: 80%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}{% endblock %}
+        <hr style="border-color: #333;">
+        <p><small>Tele-Translator ConsoleCore v1.0</small></p>
+        <p>
+            <a href="/">Home</a> | 
+            <a href="/voice-lab">Voice Lab</a> | 
+            <a href="/start-session">Start Session</a>
+        </p>
+    </div>
+</body>
+</html>

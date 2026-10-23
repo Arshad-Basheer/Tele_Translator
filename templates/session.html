@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h1>💬 Universal Translator</h1>
+    
+    <div class="card" id="setupParams">
+        <div style="display:flex; justify-content:space-around;">
+            <div style="text-align:left;">
+                <h3>User 1</h3>
+                <label>Voice:</label>
+                <select id="user1_voice">
+                    {% for user in users %} <option value="{{ user.voice_id_elevenlabs }}">{{ user.name }}</option> {% endfor %}
+                </select>
+                <br>
+                <label>Language:</label>
+                <select id="user1_lang">
+                    <option value="en" selected>English</option>
+                    <option value="ml">Malayalam</option>
+                    <option value="ta">Tamil</option>
+                    <option value="hi">Hindi</option>
+                </select>
+            </div>
+            
+            <div style="text-align:left;">
+                <h3>User 2</h3>
+                <label>Voice:</label>
+                <select id="user2_voice">
+                    {% for user in users %} <option value="{{ user.voice_id_elevenlabs }}">{{ user.name }}</option> {% endfor %}
+                </select>
+                <br>
+                <label>Language:</label>
+                <select id="user2_lang">
+                    <option value="ml">Malayalam</option>
+                    <option value="en">English</option>
+                    <option value="ta">Tamil</option>
+                    <option value="hi">Hindi</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div id="status" style="font-weight:bold; color: yellow; height: 30px; font-size:1.2em;">Ready</div>
+        
+        <div style="display:flex; justify-content:space-around; margin-top:20px;">
+            <div style="text-align:center;">
+                <button id="btnUser1" onmousedown="startRecording('user1')" onmouseup="stopRecording('user1')" 
+                        style="width:120px; height:120px; border-radius:50%; font-size:40px; border:2px solid #00d4ff; transition:0.2s;">
+                    🎤
+                </button>
+                <p>User 1 Speak</p>
+            </div>
+
+            <div style="text-align:center;">
+                <button id="btnUser2" onmousedown="startRecording('user2')" onmouseup="stopRecording('user2')" 
+                        style="width:120px; height:120px; border-radius:50%; font-size:40px; background:#444; border:2px solid #ff4444; transition:0.2s;">
+                    🎤
+                </button>
+                <p>User 2 Speak</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="chatLog" style="text-align:left; height:250px; overflow-y:scroll; background:#000; padding:10px; border:1px solid #333;">
+        <p style="color:#666; text-align:center;">History...</p>
+    </div>
+
+    <audio id="audioPlayer" style="display:none;"></audio>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function startRecording(user) {
+            const btn = (user === 'user1') ? document.getElementById('btnUser1') : document.getElementById('btnUser2');
+            document.getElementById('status').innerText = "🔴 Recording " + user + "...";
+            document.getElementById('status').style.color = "red";
+            btn.style.transform = "scale(0.9)";
+            btn.style.background = (user === 'user1') ? "#00a3cc" : "#cc0000";
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => { 
+                    if (event.data.size > 0) audioChunks.push(event.data); 
+                };
+                mediaRecorder.onstop = () => processAudio(user);
+                mediaRecorder.start();
+                audioChunks = [];
+            } catch (err) {
+                alert("Mic Access Denied. Please allow permissions.");
+            }
+        }
+
+        function stopRecording(user) {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                const btn = (user === 'user1') ? document.getElementById('btnUser1') : document.getElementById('btnUser2');
+                btn.style.transform = "scale(1)";
+                btn.style.background = (user === 'user1') ? "#00d4ff" : "#444";
+            }
+        }
+
+        async function processAudio(user) {
+            // 🔴 SAFETY CHECK: Prevent empty audio crash
+            if (audioChunks.length === 0) {
+                document.getElementById('status').innerText = "Too Short!";
+                document.getElementById('status').style.color = "orange";
+                setTimeout(() => document.getElementById('status').innerText = "Ready", 1000);
+                return;
+            }
+            
+            document.getElementById('status').innerText = "⏳ Processing...";
+            document.getElementById('status').style.color = "cyan";
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            
+            // Get Configs
+            const u1Voice = document.getElementById('user1_voice').value;
+            const u1Lang = document.getElementById('user1_lang').value;
+            const u1Name = document.getElementById('user1_voice').options[document.getElementById('user1_voice').selectedIndex].text;
+
+            const u2Voice = document.getElementById('user2_voice').value;
+            const u2Lang = document.getElementById('user2_lang').value;
+            const u2Name = document.getElementById('user2_voice').options[document.getElementById('user2_voice').selectedIndex].text;
+
+            // CROSS-TALK LOGIC: User 1 speaks U1_Lang, System translates to U2_Lang, speaks in U1_Voice
+            if (user === 'user1') {
+                formData.append('file', audioBlob, 'input.webm');
+                formData.append('speaker_name', u1Name);
+                formData.append('source_lang', u1Lang);
+                formData.append('target_lang', u2Lang);
+                formData.append('voice_id', u1Voice);
+            } else {
+                formData.append('file', audioBlob, 'input.webm');
+                formData.append('speaker_name', u2Name);
+                formData.append('source_lang', u2Lang);
+                formData.append('target_lang', u1Lang);
+                formData.append('voice_id', u2Voice);
+            }
+
+            try {
+                const response = await fetch('/process-conversation', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    document.getElementById('status').innerText = "▶ Speaking...";
+                    document.getElementById('status').style.color = "#00ff00";
+
+                    const log = document.getElementById('chatLog');
+                    const entry = `
+                        <div style="border-bottom:1px solid #333; margin-bottom:5px; padding-bottom:5px;">
+                            <span style="color:#aaa; font-size:0.8em;">${user === 'user1' ? u1Name : u2Name}:</span><br>
+                            <strong>${data.original_text}</strong><br>
+                            <span style="color:#00d4ff;">→ ${data.translated_text}</span>
+                        </div>`;
+                    log.innerHTML = entry + log.innerHTML;
+                    
+                    const audio = document.getElementById('audioPlayer');
+                    audio.src = data.audio_url;
+                    audio.play();
+                    
+                    audio.onended = () => {
+                         document.getElementById('status').innerText = "Ready";
+                         document.getElementById('status').style.color = "yellow";
+                    };
+                } else {
+                    alert("Error: " + data.message);
+                    document.getElementById('status').innerText = "Error";
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Network Error");
+                document.getElementById('status').innerText = "Network Error";
+            }
+        }
+    </script>
+{% endblock %}

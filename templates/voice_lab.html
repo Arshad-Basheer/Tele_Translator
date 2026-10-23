@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h1>🎙 Voice Lab</h1>
+    <p>Create a Digital Voice Clone.</p>
+
+    <div class="card">
+        <h3>1. New User Setup</h3>
+        <input type="text" id="username" placeholder="Enter Name (e.g., Abhishek)">
+        <br><br>
+        
+        <button id="recordBtn" style="background: #ff4444;" onclick="startRecording()">● Record</button>
+        <button id="stopBtn" style="background: #444;" onclick="stopRecording()" disabled>■ Stop</button>
+        
+        <p id="statusMsg" style="color: #aaa;">Ready to record...</p>
+        
+        <audio id="audioPreview" controls style="display:none; margin: 10px auto; width: 80%;"></audio>
+        
+        <br>
+        <button id="uploadBtn" style="background: #00d4ff;" onclick="uploadVoice()" disabled>☁ Create Voice Clone</button>
+    </div>
+
+    <div class="card">
+        <h3>Registered Profiles</h3>
+        {% if users %}
+            <ul style="list-style: none; padding: 0;">
+                {% for user in users %}
+                    <li style="background:#333; margin:5px; padding:10px; border-radius:5px; display:flex; justify-content:space-between;">
+                        <span>👤 {{ user.name }}</span>
+                        <span style="color:#00d4ff; font-size:0.8em;">ID: {{ user.voice_id_elevenlabs[:8] }}...</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No profiles found.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
+
+        async function startRecording() {
+            console.log("Attempting to start recording...");
+            
+            // 1. Check if browser supports audio API
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("❌ Your browser does not support audio recording. Please use Chrome on Laptop (localhost).");
+                return;
+            }
+
+            try {
+                // 2. Request Mic Permission
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log("Mic access granted.");
+
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    // Create audio blob
+                    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Setup preview
+                    const audio = document.getElementById('audioPreview');
+                    audio.src = audioUrl;
+                    audio.style.display = "block";
+                    
+                    // Update buttons
+                    document.getElementById('uploadBtn').disabled = false;
+                    document.getElementById('statusMsg').innerText = "Recording saved! Click 'Create Voice Clone' to finish.";
+                };
+
+                mediaRecorder.start();
+                audioChunks = []; // Reset buffer
+
+                // Update UI
+                document.getElementById('recordBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('recordBtn').style.background = "#444";
+                document.getElementById('stopBtn').style.background = "#ff4444";
+                document.getElementById('statusMsg').innerText = "🔴 Recording... Read a book passage.";
+                
+            } catch (err) {
+                console.error("Error accessing mic:", err);
+                alert("❌ Mic Error: " + err.message + "\n\nMake sure you are on http://127.0.0.1:5000 (not an IP address) and have allowed permission.");
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                document.getElementById('recordBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('recordBtn').style.background = "#ff4444";
+                document.getElementById('stopBtn').style.background = "#444";
+                console.log("Recording stopped.");
+            }
+        }
+
+        async function uploadVoice() {
+            const username = document.getElementById('username').value;
+            if (!username || !audioBlob) {
+                alert("Please enter a name and record audio first.");
+                return;
+            }
+
+            document.getElementById('statusMsg').innerText = "⏳ Uploading to ElevenLabs... This may take 10-20 seconds.";
+            document.getElementById('uploadBtn').disabled = true;
+
+            const formData = new FormData();
+            formData.append("name", username);
+            formData.append("file", audioBlob, "recording.webm");
+
+            try {
+                const response = await fetch('/add-voice', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.status === "success") {
+                    alert("✅ Success! Voice cloned for: " + username);
+                    location.reload();
+                } else {
+                    alert("❌ Server Error: " + result.message);
+                    document.getElementById('uploadBtn').disabled = false;
+                    document.getElementById('statusMsg').innerText = "Upload failed.";
+                }
+            } catch (error) {
+                console.error(error);
+                alert("❌ Network Error: Upload failed.");
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        }
+    </script>
+{% endblock %}
